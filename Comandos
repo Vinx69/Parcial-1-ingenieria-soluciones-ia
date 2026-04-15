@@ -4,5 +4,3 @@ export OPENAI_BASE_URL="https://models.inference.ai.azure.com"
 pip install openai
 python -m venv .venv
 pip install openai langchain langchain-openais
-
-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
