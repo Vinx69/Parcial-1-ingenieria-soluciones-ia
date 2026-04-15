@@ -1,5 +1,5 @@
 export GITHUB_BASE_URL="https://models.inference.ai.azure.com"
-export GITHUB_TOKEN="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"
+export GITHUB_TOKEN="YOUR_GITHUB_TOKEN_HERE"
 export OPENAI_BASE_URL="https://models.inference.ai.azure.com"
 pip install openai
 python -m venv .venv
