@@ -28,7 +28,7 @@ MESES = {
     "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12
 }
 
-def normalizar_fecha(texto: str) -> str | None:
+def normalizar_fecha(texto: str) -> Optional[str]:
     texto = texto.lower().strip()
     hoy = datetime.now()
     if texto in ("hoy", "el dia de hoy"):
@@ -65,7 +65,7 @@ def normalizar_fecha(texto: str) -> str | None:
                 return f"{d:02d}-{num_mes:02d}-{a}"
     return None
 
-def normalizar_hora(texto: str) -> str | None:
+def normalizar_hora(texto: str) -> Optional[str]:
     texto = texto.lower().strip()
     if not texto:
         return None
