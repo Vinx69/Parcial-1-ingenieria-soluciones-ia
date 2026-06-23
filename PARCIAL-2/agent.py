@@ -317,6 +317,8 @@ NUNCA describas las herramientas ni digas que estas llamando a una funcion. Solo
 Datos guardados: {formulario_actual}
 Faltan: {faltan}
 
+Sobre ORIGEN y DESTINO: Si el cliente da un lugar ambiguo como "el mall", "la playa", "el aeropuerto", "el centro", "la costanera", pide mas precision (ej: "En Puerto Montt hay varios malls, cual prefieres?"). Para lugares claros como direcciones o nombres unicos, no preguntes de mas.
+
 Habla natural, un dato a la vez. Cuando completes todos, da resumen y pregunta si confirma. Si confirma, llama agendar_viaje_definitivo y responde solo con felicitaciones."""),
     MessagesPlaceholder(variable_name="chat_history"),
     ("human", "{input}")
