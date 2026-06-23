@@ -205,20 +205,11 @@ def obtener_conflictos(fecha: str, hora: str) -> list[tuple[str, str]]:
     cursor.execute(
         "SELECT v.hora, c.nombre FROM viajes v "
         "JOIN clientes c ON v.cliente_id = c.id "
-        "WHERE v.fecha = ?", (fecha,)
+        "WHERE v.fecha = ? AND v.hora = ?", (fecha, hora)
     )
     viajes = cursor.fetchall()
     conn.close()
-    conflictos = []
-    try:
-        propuesto = datetime.strptime(f"{fecha} {hora}", "%d-%m-%Y %H:%M")
-        for h, nombre in viajes:
-            guardado = datetime.strptime(f"{fecha} {h}", "%d-%m-%Y %H:%M")
-            if abs(propuesto - guardado) < timedelta(hours=1):
-                conflictos.append((h, nombre))
-    except ValueError:
-        pass
-    return conflictos
+    return viajes
 
 @tool
 def guardar_datos_viaje(
@@ -292,24 +283,6 @@ tools_map = {
 }
 llm_with_tools = llm.bind_tools([guardar_datos_viaje, agendar_viaje_definitivo])
 
-prompt = ChatPromptTemplate.from_messages([
-    ("system", """Eres un asistente de Transportes Pardo en Puerto Montt. Ayudas a agendar viajes.
-
-PASE el texto EXACTO del cliente al tool "guardar_datos_viaje". NO modifiques fechas ni horas.
-Ej: si dicen "pasado manana a las 3pm", pasar fecha="pasado manana" y hora="3pm".
-
-Campos del formulario: {formulario_actual}
-
-Reglas:
-- USA el tool guardar_datos_viaje cuando el cliente entregue datos (siempre usando texto exacto).
-- Si el tool responde ERROR DE AGENDAMIENTO, avisa al cliente y pide nueva hora.
-- Si el tool responde "Progreso:" con todos los campos completos, responde con el resumen formateado naturalmente y pide confirmacion. NO muestres el resultado del tool tal cual.
-- Si el cliente confirma, USA el tool agendar_viaje_definitivo.
-- Cuando se agende, responde SOLO: "Viaje registrado con exito." y despidete."""),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("human", "{input}")
-])
-
 def _formatear_viaje(d: dict) -> str:
     partes = []
     for k, v in d.items():
@@ -318,9 +291,45 @@ def _formatear_viaje(d: dict) -> str:
             partes.append(f"{label}: {v}")
     return " | ".join(partes) if partes else "(vacio)"
 
+def _formatear_resumen(d: dict) -> str:
+    etiquetas = {"nombre": "Nombre", "origen": "Origen", "destino": "Destino", "fecha": "Fecha", "hora": "Hora", "pasajeros": "Pasajeros"}
+    lineas = [f"  {etiquetas[k]}: {v}" for k, v in d.items() if v is not None]
+    return "\n".join(lineas)
+
+def _todos_completos(d: dict) -> bool:
+    return all(v is not None for v in d.values())
+
+modo_esperando_confirmacion = False
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", """Eres un asistente de Transportes Pardo en Puerto Montt. Hablas natural, SIN descripciones tecnicas ni menciones a tools.
+
+Dispones de 2 HERRAMIENTAS que debes USAR SIEMPRE que corresponda:
+
+Tool 1 - guardar_datos_viaje:
+  - PASA el texto EXACTO del cliente (fechas, horas) sin modificar.
+  - ej: "pasado manana a las 3pm" → fecha="pasado manana", hora="3pm"
+  - Llama a esta herramienta SIEMPRE que el cliente entregue datos del viaje.
+  - NUNCA respondas sin haberla llamado si el cliente dio datos.
+
+Tool 2 - agendar_viaje_definitivo:
+  - Llama a esta SOLO cuando el cliente haya CONFIRMADO explicitamente.
+
+DATOS ACTUALES: {formulario_actual}
+
+FLUJO OBLIGATORIO:
+PASO 1: El cliente da datos → LLAMA SIEMPRE a guardar_datos_viaje.
+PASO 2: Si guardar_datos_viaje devuelve ERROR DE AGENDAMIENTO → informa del conflicto y pide nueva hora.
+PASO 3: Si guardar_datos_viaje devuelve "Progreso:" con TODOS los campos llenos → muestra el resumen PREGUNTANDO "¿Confirmas el viaje?".
+PASO 4: Si el cliente responde que SI → LLAMA agendar_viaje_definitivo y responde "Viaje registrado con exito. ¡Gracias por preferir Transportes Pardo!"
+PASO 5: Si faltan datos → pide solo lo que falta, nada mas."""),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}")
+])
+
 @chain
 def coordinar_agente(query_input: dict) -> dict:
-    global viaje_actual
+    global viaje_actual, modo_esperando_confirmacion
     query_input["formulario_actual"] = _formatear_viaje(viaje_actual)
     respuesta = (prompt | llm_with_tools).invoke(query_input)
     if respuesta.tool_calls:
@@ -330,7 +339,16 @@ def coordinar_agente(query_input: dict) -> dict:
                 formulario_str = _formatear_viaje(viaje_actual) + f"\nResultado: {resultado}"
                 query_input["formulario_actual"] = formulario_str
         final = (prompt | llm).invoke(query_input)
-        return {"output": final.content}
+        texto = final.content
+        # Si todos los datos estan completos y el LLM no pidio confirmacion, la forzamos
+        if _todos_completos(viaje_actual) and "registrado" not in texto.lower() and "exito" not in texto.lower():
+            if "confirm" not in texto.lower():
+                modo_esperando_confirmacion = True
+                resumen = _formatear_resumen(viaje_actual)
+                return {"output": f"{resumen}\n\n¿Confirmas el viaje?"}
+        modo_esperando_confirmacion = False
+        return {"output": texto}
+    modo_esperando_confirmacion = False
     return {"output": respuesta.content}
 
 historiales = {}
