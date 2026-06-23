@@ -2,204 +2,188 @@
 <html class="light" lang="es"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Transportes Pardo - Panel de Gestión</title>
+<title>Transportes Pardo</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                    "secondary-container": "#86f898",
-                    "on-tertiary-fixed": "#261a00",
-                    "surface-bright": "#f7f9ff",
-                    "on-primary-fixed": "#001a41",
-                    "tertiary-fixed": "#ffdea0",
-                    "tertiary": "#795900",
-                    "surface-variant": "#dfe3e8",
-                    "tertiary-fixed-dim": "#fbbc06",
-                    "surface-tint": "#005bc0",
-                    "on-tertiary-container": "#ffffff",
-                    "error-container": "#ffdad6",
-                    "primary": "#005bbf",
-                    "surface-container-high": "#e5e8ee",
-                    "primary-fixed-dim": "#adc7ff",
-                    "on-background": "#181c20",
-                    "surface-container-highest": "#dfe3e8",
-                    "on-error-container": "#93000a",
-                    "on-secondary-fixed-variant": "#005320",
-                    "outline-variant": "#c1c6d6",
-                    "inverse-primary": "#adc7ff",
-                    "on-error": "#ffffff",
-                    "surface-dim": "#d7dae0",
-                    "on-secondary-fixed": "#002108",
-                    "surface": "#f7f9ff",
-                    "on-primary-container": "#ffffff",
-                    "background": "#f7f9ff",
-                    "secondary": "#006e2c",
-                    "primary-fixed": "#d8e2ff",
-                    "error": "#ba1a1a",
-                    "on-primary-fixed-variant": "#004493",
-                    "surface-container-lowest": "#ffffff",
-                    "on-tertiary": "#ffffff",
-                    "on-primary": "#ffffff",
-                    "surface-container": "#ebeef4",
-                    "primary-container": "#1a73e8",
-                    "surface-container-low": "#f1f4fa",
-                    "inverse-on-surface": "#eef1f7",
-                    "tertiary-container": "#987000",
-                    "secondary-fixed": "#89fa9b",
-                    "on-surface": "#181c20",
-                    "on-surface-variant": "#414754",
-                    "secondary-fixed-dim": "#6ddd81",
-                    "on-tertiary-fixed-variant": "#5c4300",
-                    "on-secondary-container": "#00722f",
-                    "inverse-surface": "#2d3135",
-                    "outline": "#727785",
-                    "on-secondary": "#ffffff"
-            },
-            "borderRadius": {
-                    "DEFAULT": "0.25rem",
-                    "lg": "0.5rem",
-                    "xl": "0.75rem",
-                    "full": "9999px"
-            },
-            "spacing": {
-                    "stack-md": "16px",
-                    "stack-lg": "24px",
-                    "unit": "4px",
-                    "stack-sm": "8px",
-                    "margin-mobile": "16px",
-                    "chat-group-gap": "12px",
-                    "gutter-mobile": "12px",
-                    "chat-gap": "4px"
-            },
-            "fontFamily": {
-                    "label-md": ["Inter"],
-                    "body-md": ["Inter"],
-                    "chat-text": ["Inter"],
-                    "headline-md": ["Inter"],
-                    "headline-lg": ["Inter"],
-                    "headline-lg-mobile": ["Inter"],
-                    "body-lg": ["Inter"]
-            },
-            "fontSize": {
-                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
-                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
-                    "chat-text": ["15px", {"lineHeight": "22px", "fontWeight": "400"}],
-                    "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
-                    "headline-lg": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
-                    "headline-lg-mobile": ["24px", {"lineHeight": "30px", "fontWeight": "700"}],
-                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
-            }
-          },
-        },
-      }
-    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #dfe3e8; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #c1c6d6; }
-    </style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #dfe3e8; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #c1c6d6; }
+  .nav-active { background: #d8e2ff; color: #004493; }
+</style>
 </head>
-<body class="bg-background text-on-surface font-body-md text-body-md overflow-hidden h-screen flex flex-col">
-<header class="fixed top-0 w-full z-50 bg-surface shadow-sm flex justify-between items-center px-margin-mobile h-12">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">local_shipping</span>
-<h1 class="font-headline-md text-headline-md text-primary tracking-tight">Transportes Pardo</h1>
-</div>
-<div class="flex items-center gap-4">
-<div class="hidden md:flex items-center bg-surface-container-low px-3 py-1 rounded-full gap-2 border border-outline-variant">
-<span class="material-symbols-outlined text-[18px] text-primary">location_on</span>
-<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Puerto Montt</span>
-</div>
-</div>
+<body class="bg-[#f7f9ff] text-[#181c20] font-['Inter'] text-[14px] overflow-hidden h-screen flex flex-col">
+
+<!-- HEADER -->
+<header class="fixed top-0 w-full z-50 bg-white shadow-sm flex justify-between items-center px-6 h-12">
+  <div class="flex items-center gap-3">
+    <span class="material-symbols-outlined text-[#005bbf]" style="font-variation-settings:'FILL'1">local_shipping</span>
+    <h1 class="text-lg font-bold text-[#005bbf] tracking-tight">Transportes Pardo</h1>
+  </div>
+  <div class="flex items-center gap-2 bg-[#f1f4fa] px-3 py-1 rounded-full text-xs text-[#414754]">
+    <span class="material-symbols-outlined text-[16px] text-[#005bbf]">location_on</span>
+    Puerto Montt
+  </div>
 </header>
 
 <main class="flex flex-1 pt-12 overflow-hidden">
 
-  <!-- PANEL IZQUIERDO: Menú Principal + Chat -->
-  <aside class="w-96 bg-surface-container-lowest border-r border-outline-variant flex flex-col overflow-hidden">
+  <!-- PANEL IZQUIERDO - NAVEGACION -->
+  <aside class="w-56 bg-white border-r border-[#c1c6d6] flex flex-col py-4 px-3 gap-1 shrink-0">
+    <div class="text-[10px] font-semibold text-[#727785] uppercase tracking-widest px-3 pb-2">Menu</div>
+    <button onclick="mostrarPantalla('inicio')" id="btn-inicio" class="nav-active flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-colors hover:bg-[#ebeef4]">
+      <span class="material-symbols-outlined text-[20px]">home</span>
+      Menu Principal
+    </button>
+    <button onclick="mostrarPantalla('chat')" id="btn-chat" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-colors hover:bg-[#ebeef4] text-[#414754]">
+      <span class="material-symbols-outlined text-[20px]">chat</span>
+      Chat
+    </button>
 
-    <!-- Menú Principal - Bienvenida -->
-    <div class="bg-gradient-to-r from-primary to-primary-container text-white p-6 space-y-2">
-      <div class="flex items-center gap-3 mb-2">
-        <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">local_shipping</span>
-        <h2 class="font-headline-md text-headline-md font-bold">Transportes Pardo</h2>
+    <div class="mt-auto pt-4 border-t border-[#c1c6d6]">
+      <div class="bg-[#ebeef4] p-3 rounded-xl text-xs text-[#414754] space-y-1">
+        <div class="flex justify-between"><span>Peticiones</span><span class="font-bold text-[#005bbf]" id="peticiones">-</span></div>
+        <div class="flex justify-between"><span>Viajes</span><span class="font-bold" id="total-viajes">-</span></div>
       </div>
-      <p class="text-sm text-white/80">Bienvenido al sistema de gestión de viajes. Agende y administre sus traslados de forma rápida y segura en Puerto Montt.</p>
-      <div class="flex gap-4 pt-2 text-xs text-white/70">
-        <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 24/7</span>
-        <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">verified</span> Seguro</span>
-        <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">flash_on</span> Rápido</span>
+    </div>
+  </aside>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <section class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- PANTALLA INICIO -->
+    <div id="pantalla-inicio" class="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8">
+      <div class="max-w-2xl mx-auto space-y-6">
+        <!-- Hero -->
+        <div class="bg-gradient-to-br from-[#005bbf] to-[#1a73e8] text-white p-8 rounded-2xl shadow-lg">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-4xl" style="font-variation-settings:'FILL'1">local_shipping</span>
+            <div>
+              <h2 class="text-2xl font-bold">Transportes Pardo</h2>
+              <p class="text-white/70 text-sm">Puerto Montt, Chile</p>
+            </div>
+          </div>
+          <p class="text-white/90 text-base leading-relaxed">
+            Bienvenido al sistema de agendamiento de viajes. Planifique sus traslados de forma rapida, segura y eficiente.
+          </p>
+          <div class="flex gap-6 mt-4 text-sm text-white/70">
+            <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">schedule</span> 24/7</span>
+            <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">verified</span> Seguro</span>
+            <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">flash_on</span> Rapido</span>
+          </div>
+        </div>
+
+        <!-- Como funciona -->
+        <div class="bg-white p-6 rounded-2xl border border-[#c1c6d6] space-y-4">
+          <h3 class="text-lg font-bold flex items-center gap-2">
+            <span class="material-symbols-outlined text-[#005bbf]">help</span>
+            Como funciona
+          </h3>
+          <div class="grid gap-4">
+            <div class="flex gap-3 items-start">
+              <span class="bg-[#d8e2ff] w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[#005bbf] text-[18px]">edit_note</span>
+              </span>
+              <div>
+                <p class="font-semibold">1. Cuentanos tu viaje</p>
+                <p class="text-sm text-[#414754]">Indicanos nombre, origen, destino, fecha, hora y cuantos pasajeros son.</p>
+              </div>
+            </div>
+            <div class="flex gap-3 items-start">
+              <span class="bg-[#d8e2ff] w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[#005bbf] text-[18px]">fact_check</span>
+              </span>
+              <div>
+                <p class="font-semibold">2. Revisa y confirma</p>
+                <p class="text-sm text-[#414754]">El sistema mostrara un resumen con toda la informacion. Revisa que todo este correcto.</p>
+              </div>
+            </div>
+            <div class="flex gap-3 items-start">
+              <span class="bg-[#d8e2ff] w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[#005bbf] text-[18px]">check_circle</span>
+              </span>
+              <div>
+                <p class="font-semibold">3. Viaje registrado</p>
+                <p class="text-sm text-[#414754]">Confirma los datos y el viaje quedara registrado automaticamente.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formatos aceptados -->
+        <div class="bg-white p-6 rounded-2xl border border-[#c1c6d6] space-y-3">
+          <h3 class="text-lg font-bold flex items-center gap-2">
+            <span class="material-symbols-outlined text-[#005bbf]">info</span>
+            Formatos aceptados
+          </h3>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="bg-[#f1f4fa] p-3 rounded-xl">
+              <p class="font-semibold text-xs text-[#727785] uppercase">Fechas</p>
+              <p class="mt-1">hoy, manana, pasado manana<br/>DD-MM-AAAA, DD/MM/AAAA<br/>5 de enero 2026</p>
+            </div>
+            <div class="bg-[#f1f4fa] p-3 rounded-xl">
+              <p class="font-semibold text-xs text-[#727785] uppercase">Horas</p>
+              <p class="mt-1">8am, 1pm, 1:00pm<br/>1 de la tarde, 8 de la noche<br/>13:00, medianoche</p>
+            </div>
+          </div>
+          <p class="text-xs text-[#727785]">Ejemplo: "Viaje para Juan desde Pto Montt a Castro manana a las 8am, 2 pasajeros"</p>
+        </div>
       </div>
     </div>
 
-    <!-- Chat de Pasajeros -->
-    <div class="flex-1 flex flex-col overflow-hidden">
-      <div class="px-4 py-3 border-b border-outline-variant flex items-center justify-between bg-surface">
+    <!-- PANTALLA CHAT -->
+    <div id="pantalla-chat" class="flex-1 flex flex-col overflow-hidden hidden">
+      <div class="px-6 py-3 border-b border-[#c1c6d6] flex items-center justify-between bg-white">
         <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">chat</span>
-          <h3 class="font-label-md text-label-md text-on-surface font-semibold">Chat de Pasajeros</h3>
+          <span class="material-symbols-outlined text-[#005bbf]" style="font-variation-settings:'FILL'1">chat</span>
+          <h2 class="font-semibold">Chat de Pasajeros</h2>
         </div>
-        <button class="p-1 hover:bg-surface-container rounded-full transition-colors" onclick="limpiarChat()" title="Limpiar chat">
-          <span class="material-symbols-outlined text-[18px] text-on-surface-variant">delete_sweep</span>
+        <button onclick="limpiarChat()" class="p-1.5 hover:bg-[#ebeef4] rounded-full transition-colors" title="Limpiar chat">
+          <span class="material-symbols-outlined text-[18px] text-[#414754]">delete_sweep</span>
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar" id="chat-area">
-        <div class="flex items-start gap-3 max-w-[90%]" id="msg-bienvenida">
-          <div class="w-8 h-8 rounded-full bg-surface-variant flex-shrink-0 flex items-center justify-center">
+      <div class="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar" id="chat-area">
+        <div class="flex items-start gap-3 max-w-[80%]">
+          <div class="w-8 h-8 rounded-full bg-[#dfe3e8] flex-shrink-0 flex items-center justify-center">
             <span class="material-symbols-outlined text-[18px]">person</span>
           </div>
           <div class="bg-[#E9ECEF] text-[#202124] p-4 rounded-2xl rounded-tl-none shadow-sm">
-            <p class="font-chat-text text-chat-text">¡Bienvenido! ¿A dónde necesita trasladarse hoy?</p>
+            <p class="text-[15px] leading-[22px]">!Bienvenido! ¿A donde necesita trasladarse hoy?</p>
           </div>
         </div>
       </div>
 
-      <div class="p-4 bg-white border-t border-outline-variant">
-        <div class="flex items-center gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-1 focus-within:ring-2 focus-within:ring-primary transition-all">
-          <input class="flex-1 bg-transparent border-none focus:ring-0 text-body-md py-2 px-3 outline-none" placeholder="Escriba su mensaje..." type="text" id="input-mensaje"/>
-          <button class="bg-primary text-white w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-transform" id="btn-enviar">
+      <div class="p-4 bg-white border-t border-[#c1c6d6]">
+        <div class="flex items-center gap-2 bg-[#f1f4fa] border border-[#c1c6d6] rounded-2xl p-1 focus-within:ring-2 focus-within:ring-[#005bbf] transition-all">
+          <input class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-3 outline-none" placeholder="Escriba su mensaje..." type="text" id="input-mensaje"/>
+          <button class="bg-[#005bbf] text-white w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-transform" id="btn-enviar">
             <span class="material-symbols-outlined text-[18px]">send</span>
           </button>
         </div>
       </div>
     </div>
-  </aside>
 
-  <!-- PANEL DERECHO: Viajes Registrados -->
-  <section class="flex-1 flex flex-col overflow-hidden bg-background">
-    <div class="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-white">
-      <h2 class="font-headline-md text-headline-md font-bold">Viajes Registrados</h2>
-      <div class="flex items-center gap-3">
-        <span class="bg-surface-container px-3 py-1 rounded-full text-xs text-on-surface-variant" id="seg-status">
-          <span id="peticiones">-</span> peticiones
-        </span>
-        <span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded text-[10px] font-bold">LIVE</span>
-      </div>
-    </div>
-    <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar" id="viajes-container">
-      <div class="flex items-center justify-center h-32 text-outline">
-        <span>Cargando viajes...</span>
-      </div>
-    </div>
   </section>
-
 </main>
-
-<div class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-inverse-surface text-inverse-on-surface px-6 py-3 rounded-full shadow-2xl transition-all opacity-0 translate-y-10 z-[100] pointer-events-none" id="toast"></div>
 
 <script>
 const API = window.location.origin;
-const SESSION = 'stitch_' + Date.now();
+const SESSION = 'chat_' + Date.now();
+
+function mostrarPantalla(pantalla) {
+  document.getElementById('pantalla-inicio').classList.toggle('hidden', pantalla !== 'inicio');
+  document.getElementById('pantalla-chat').classList.toggle('hidden', pantalla !== 'chat');
+  document.getElementById('btn-inicio').classList.toggle('nav-active', pantalla === 'inicio');
+  document.getElementById('btn-chat').classList.toggle('nav-active', pantalla === 'chat');
+  if (pantalla === 'inicio' || pantalla === 'chat') {
+    document.getElementById('btn-inicio').classList.toggle('text-[#414754]', pantalla !== 'inicio');
+    document.getElementById('btn-chat').classList.toggle('text-[#414754]', pantalla !== 'chat');
+  }
+}
 
 async function cargarSeguridad() {
   try {
@@ -213,53 +197,18 @@ async function cargarViajes() {
   try {
     const r = await fetch(API + '/api/viajes');
     const d = await r.json();
-    const container = document.getElementById('viajes-container');
-    if (!d.viajes || d.viajes.length === 0) {
-      container.innerHTML = '<div class="flex items-center justify-center h-32 text-outline">No hay viajes registrados</div>';
-      return;
-    }
-    container.innerHTML = d.viajes.map(v => {
-      return `
-        <div class="bg-white p-5 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant hover:border-primary transition-all group">
-          <div class="flex justify-between items-start mb-3">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-lg bg-primary-fixed flex items-center justify-center">
-                <span class="material-symbols-outlined text-primary text-[22px]" style="font-variation-settings: 'FILL' 1;">person</span>
-              </div>
-              <div>
-                <h4 class="font-semibold text-on-surface">${v[1]}</h4>
-                <p class="text-xs text-outline">${v[6]} pasajero${v[6] > 1 ? 's' : ''}</p>
-              </div>
-            </div>
-            <span class="bg-primary-fixed-dim text-on-primary-fixed px-3 py-1 rounded-full text-[10px] font-bold tracking-wider">CONFIRMADO</span>
-          </div>
-          <div class="grid grid-cols-2 gap-3 border-t border-outline-variant pt-3">
-            <div class="flex items-center gap-2 text-sm text-on-surface-variant">
-              <span class="material-symbols-outlined text-[18px]">calendar_today</span>
-              <span>${v[4]}</span>
-            </div>
-            <div class="flex items-center gap-2 text-sm text-on-surface-variant">
-              <span class="material-symbols-outlined text-[18px]">schedule</span>
-              <span>${v[5]}</span>
-            </div>
-            <div class="flex items-center gap-2 text-sm text-on-surface-variant col-span-2">
-              <span class="material-symbols-outlined text-[18px]">route</span>
-              <span>${v[2]} → ${v[3]}</span>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-  } catch(e) {
-    document.getElementById('viajes-container').innerHTML = '<div class="flex items-center justify-center h-32 text-outline">Error al cargar viajes</div>';
-  }
+    document.getElementById('total-viajes').textContent = d.viajes ? d.viajes.length : 0;
+  } catch(e) {}
 }
 
 function mostrarToast(msg) {
   const t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
   t.style.opacity = '1';
   t.style.transform = 'translate(-50%, 0)';
-  setTimeout(() => {
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => {
     t.style.opacity = '0';
     t.style.transform = 'translate(-50%, 40px)';
   }, 3000);
@@ -267,22 +216,20 @@ function mostrarToast(msg) {
 
 function agregarBurbuja(texto, tipo) {
   const area = document.getElementById('chat-area');
-  const className = tipo === 'user'
-    ? 'bg-primary text-white rounded-2xl rounded-tr-none shadow-md'
-    : tipo === 'error'
-    ? 'bg-error-container text-on-error-container rounded-2xl'
-    : 'bg-[#E9ECEF] text-[#202124] rounded-2xl rounded-tl-none shadow-sm';
+  const userCls = tipo === 'user' ? 'bg-[#005bbf] text-white rounded-2xl rounded-tr-none shadow-md' :
+                  tipo === 'error' ? 'bg-[#ffdad6] text-[#93000a] rounded-2xl' :
+                  'bg-[#E9ECEF] text-[#202124] rounded-2xl rounded-tl-none shadow-sm';
   const align = tipo === 'user' ? 'justify-end ml-auto' : '';
   const div = document.createElement('div');
-  div.className = `flex items-start gap-3 max-w-[90%] ${align}`;
+  div.className = `flex items-start gap-3 max-w-[80%] ${align}`;
   if (tipo === 'user') {
-    div.innerHTML = `<div class="${className} p-4"><p class="font-chat-text text-chat-text">${texto}</p></div>`;
+    div.innerHTML = `<div class="${userCls} p-4"><p class="text-[15px] leading-[22px]">${texto}</p></div>`;
   } else {
     div.innerHTML = `
-      <div class="w-8 h-8 rounded-full bg-surface-variant flex-shrink-0 flex items-center justify-center">
+      <div class="w-8 h-8 rounded-full bg-[#dfe3e8] flex-shrink-0 flex items-center justify-center">
         <span class="material-symbols-outlined text-[18px]">${tipo === 'error' ? 'warning' : 'person'}</span>
       </div>
-      <div class="${className} p-4"><p class="font-chat-text text-chat-text">${texto}</p></div>`;
+      <div class="${userCls} p-4"><p class="text-[15px] leading-[22px]">${texto}</p></div>`;
   }
   area.appendChild(div);
   area.scrollTop = area.scrollHeight;
@@ -292,13 +239,13 @@ function mostrarEscribiendo() {
   const area = document.getElementById('chat-area');
   const div = document.createElement('div');
   div.id = 'escribiendo';
-  div.className = 'flex items-start gap-3 max-w-[90%]';
+  div.className = 'flex items-start gap-3 max-w-[80%]';
   div.innerHTML = `
-    <div class="w-8 h-8 rounded-full bg-surface-variant flex-shrink-0 flex items-center justify-center">
+    <div class="w-8 h-8 rounded-full bg-[#dfe3e8] flex-shrink-0 flex items-center justify-center">
       <span class="material-symbols-outlined text-[18px]">person</span>
     </div>
     <div class="bg-[#E9ECEF] text-[#202124] p-4 rounded-2xl rounded-tl-none shadow-sm">
-      <p class="font-chat-text text-chat-text">Escribiendo...</p>
+      <p class="text-[15px] leading-[22px]">Escribiendo...</p>
     </div>`;
   area.appendChild(div);
   area.scrollTop = area.scrollHeight;
@@ -324,11 +271,7 @@ async function enviarMensaje() {
     });
     const d = await r.json();
     quitarEscribiendo();
-    if (d.bloqueado) {
-      agregarBurbuja(d.respuesta + ' (bloqueado por seguridad)', 'error');
-    } else {
-      agregarBurbuja(d.respuesta, 'assistant');
-    }
+    agregarBurbuja(d.respuesta, d.bloqueado ? 'error' : 'assistant');
   } catch(e) {
     quitarEscribiendo();
     agregarBurbuja('Error de conexion con el servidor', 'error');
@@ -340,23 +283,24 @@ async function enviarMensaje() {
 function limpiarChat() {
   const area = document.getElementById('chat-area');
   area.innerHTML = `
-    <div class="flex items-start gap-3 max-w-[90%]">
-      <div class="w-8 h-8 rounded-full bg-surface-variant flex-shrink-0 flex items-center justify-center">
+    <div class="flex items-start gap-3 max-w-[80%]">
+      <div class="w-8 h-8 rounded-full bg-[#dfe3e8] flex-shrink-0 flex items-center justify-center">
         <span class="material-symbols-outlined text-[18px]">person</span>
       </div>
       <div class="bg-[#E9ECEF] text-[#202124] p-4 rounded-2xl rounded-tl-none shadow-sm">
-        <p class="font-chat-text text-chat-text">¡Bienvenido! ¿A dónde necesita trasladarse hoy?</p>
+        <p class="text-[15px] leading-[22px]">!Bienvenido! ¿A donde necesita trasladarse hoy?</p>
       </div>
     </div>`;
-  mostrarToast('Conversacion limpiada');
+  mostrarToast('Chat limpiado');
 }
 
 document.getElementById('btn-enviar').addEventListener('click', enviarMensaje);
-document.getElementById('input-mensaje').addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') enviarMensaje();
-});
+document.getElementById('input-mensaje').addEventListener('keypress', (e) => { if (e.key === 'Enter') enviarMensaje(); });
 
 cargarSeguridad();
 cargarViajes();
 </script>
+
+<!-- Toast -->
+<div class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-[#2d3135] text-[#eef1f7] px-6 py-3 rounded-full shadow-2xl transition-all opacity-0 translate-y-10 z-[100] pointer-events-none" id="toast"></div>
 </body></html>

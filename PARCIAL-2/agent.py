@@ -4,11 +4,13 @@ import sqlite3
 from typing import Optional
 from datetime import datetime, timedelta
 
-os.environ["LANGCHAIN_TRACING_V2"] = "false"
-os.environ["LANGCHAIN_DISABLED"] = "true"
-
 from dotenv import load_dotenv
 load_dotenv()
+
+os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")
+os.environ.setdefault("LANGCHAIN_DISABLED", "true")
+os.environ.setdefault("LANGCHAIN_ENDPOINT", "")
+os.environ.setdefault("LANGSMITH_TRACING", "false")
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -220,7 +222,7 @@ def guardar_datos_viaje(
     hora: Optional[str] = None,
     pasajeros: Optional[int] = None
 ) -> str:
-    """Guarda o actualiza los datos del viaje que el cliente va mencionando. Acepta formatos flexibles de fecha y hora."""
+    """Guarda o actualiza los datos del viaje. PASA SIEMPRE el texto exacto del cliente, la funcion normaliza automaticamente fechas como 'manana', 'pasado manana', '5 de enero', '1/1/2026', '8am', '1pm', '1 de la tarde', '13:00'."""
     global viaje_actual
     if nombre:
         viaje_actual["nombre"] = nombre.strip()
@@ -283,72 +285,63 @@ tools_map = {
 }
 llm_with_tools = llm.bind_tools([guardar_datos_viaje, agendar_viaje_definitivo])
 
+CAMPOS = {"nombre": "Nombre", "origen": "Origen", "destino": "Destino", "fecha": "Fecha", "hora": "Hora", "pasajeros": "Pasajeros"}
+
 def _formatear_viaje(d: dict) -> str:
     partes = []
     for k, v in d.items():
         if v is not None:
-            label = {"nombre": "Nombre", "origen": "Origen", "destino": "Destino", "fecha": "Fecha", "hora": "Hora", "pasajeros": "Pasajeros"}.get(k, k)
-            partes.append(f"{label}: {v}")
+            partes.append(f"{CAMPOS.get(k, k)}: {v}")
     return " | ".join(partes) if partes else "(vacio)"
 
-def _formatear_resumen(d: dict) -> str:
-    etiquetas = {"nombre": "Nombre", "origen": "Origen", "destino": "Destino", "fecha": "Fecha", "hora": "Hora", "pasajeros": "Pasajeros"}
-    lineas = [f"  {etiquetas[k]}: {v}" for k, v in d.items() if v is not None]
-    return "\n".join(lineas)
+def _campos_faltantes(d: dict) -> list[str]:
+    etiq = {"nombre": "tu nombre", "origen": "el origen", "destino": "el destino", "fecha": "la fecha", "hora": "la hora", "pasajeros": "los pasajeros"}
+    return [etiq[k] for k, v in d.items() if v is None]
 
 def _todos_completos(d: dict) -> bool:
     return all(v is not None for v in d.values())
 
-modo_esperando_confirmacion = False
+def _resumen_confirmar(d: dict) -> str:
+    lineas = [f"  {CAMPOS[k]}: {v}" for k, v in d.items() if v is not None]
+    return "\n".join(lineas)
 
 prompt = ChatPromptTemplate.from_messages([
-    ("system", """Eres un asistente de Transportes Pardo en Puerto Montt. Hablas natural, SIN descripciones tecnicas ni menciones a tools.
+    ("system", """Eres asistente de Transportes Pardo en Puerto Montt, Chile.
 
-Dispones de 2 HERRAMIENTAS que debes USAR SIEMPRE que corresponda:
+Recolecta en orden: nombre, origen, destino, fecha, hora, pasajeros.
 
-Tool 1 - guardar_datos_viaje:
-  - PASA el texto EXACTO del cliente (fechas, horas) sin modificar.
-  - ej: "pasado manana a las 3pm" → fecha="pasado manana", hora="3pm"
-  - Llama a esta herramienta SIEMPRE que el cliente entregue datos del viaje.
-  - NUNCA respondas sin haberla llamado si el cliente dio datos.
+IMPORTANTE: Cuando el cliente te de cualquier informacion, DEBES llamar guardar_datos_viaje INMEDIATAMENTE con el texto exacto. Ej: cliente dice "manana" -> llamas guardar_datos_viaje(fecha="manana"). La funcion normaliza formatos libres.
 
-Tool 2 - agendar_viaje_definitivo:
-  - Llama a esta SOLO cuando el cliente haya CONFIRMADO explicitamente.
+NUNCA describas las herramientas ni digas que estas llamando a una funcion. Solo responde natural.
 
-DATOS ACTUALES: {formulario_actual}
+Datos guardados: {formulario_actual}
+Faltan: {faltan}
 
-FLUJO OBLIGATORIO:
-PASO 1: El cliente da datos → LLAMA SIEMPRE a guardar_datos_viaje.
-PASO 2: Si guardar_datos_viaje devuelve ERROR DE AGENDAMIENTO → informa del conflicto y pide nueva hora.
-PASO 3: Si guardar_datos_viaje devuelve "Progreso:" con TODOS los campos llenos → muestra el resumen PREGUNTANDO "¿Confirmas el viaje?".
-PASO 4: Si el cliente responde que SI → LLAMA agendar_viaje_definitivo y responde "Viaje registrado con exito. ¡Gracias por preferir Transportes Pardo!"
-PASO 5: Si faltan datos → pide solo lo que falta, nada mas."""),
+Habla natural, un dato a la vez. Cuando completes todos, da resumen y pregunta si confirma. Si confirma, llama agendar_viaje_definitivo y responde solo con felicitaciones."""),
     MessagesPlaceholder(variable_name="chat_history"),
     ("human", "{input}")
 ])
 
 @chain
 def coordinar_agente(query_input: dict) -> dict:
-    global viaje_actual, modo_esperando_confirmacion
+    global viaje_actual
     query_input["formulario_actual"] = _formatear_viaje(viaje_actual)
+    query_input["faltan"] = ", ".join(_campos_faltantes(viaje_actual)) if not _todos_completos(viaje_actual) else "ninguno (todos completos)"
     respuesta = (prompt | llm_with_tools).invoke(query_input)
     if respuesta.tool_calls:
         for tc in respuesta.tool_calls:
             if tc["name"] in tools_map:
                 resultado = tools_map[tc["name"]].invoke(tc["args"])
-                formulario_str = _formatear_viaje(viaje_actual) + f"\nResultado: {resultado}"
-                query_input["formulario_actual"] = formulario_str
+                query_input["formulario_actual"] = _formatear_viaje(viaje_actual)
+                query_input["faltan"] = ", ".join(_campos_faltantes(viaje_actual)) if not _todos_completos(viaje_actual) else "ninguno (todos completos)"
+                if resultado.startswith("ERROR DE AGENDAMIENTO"):
+                    query_input["formulario_actual"] += f"\nConflicto: {resultado}"
         final = (prompt | llm).invoke(query_input)
         texto = final.content
-        # Si todos los datos estan completos y el LLM no pidio confirmacion, la forzamos
-        if _todos_completos(viaje_actual) and "registrado" not in texto.lower() and "exito" not in texto.lower():
-            if "confirm" not in texto.lower():
-                modo_esperando_confirmacion = True
-                resumen = _formatear_resumen(viaje_actual)
-                return {"output": f"{resumen}\n\n¿Confirmas el viaje?"}
-        modo_esperando_confirmacion = False
+        # Si estan todos completos y el LLM no pregunto confirmacion, la agregamos
+        if _todos_completos(viaje_actual) and "confirm" not in texto.lower() and "correct" not in texto.lower() and "registrado" not in texto.lower():
+            return {"output": _resumen_confirmar(viaje_actual) + "\n\n¿Todos los datos son correctos?"}
         return {"output": texto}
-    modo_esperando_confirmacion = False
     return {"output": respuesta.content}
 
 historiales = {}

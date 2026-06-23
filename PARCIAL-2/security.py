@@ -147,7 +147,7 @@ class FiltroEtico:
         terminos = []
         for categoria, palabras in CATEGORIAS_ETICAS.items():
             for termino in palabras:
-                if termino in texto_lower:
+                if re.search(r"\b" + re.escape(termino) + r"\b", texto_lower):
                     categorias.append(categoria)
                     terminos.append(termino)
         categorias_unicas = list(set(categorias))
