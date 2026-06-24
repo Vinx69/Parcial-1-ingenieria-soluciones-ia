@@ -1,8 +1,11 @@
 import os
 import re
 import sqlite3
+import smtplib
 from typing import Optional
 from datetime import datetime, timedelta
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -12,12 +15,13 @@ os.environ.setdefault("LANGCHAIN_DISABLED", "true")
 os.environ.setdefault("LANGCHAIN_ENDPOINT", "")
 os.environ.setdefault("LANGSMITH_TRACING", "false")
 
+GMAIL_REMITENTE = os.getenv("GMAIL_REMITENTE")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
 from langchain_core.chat_history import InMemoryChatMessageHistory
-from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_core.runnables import chain
+from langchain_core.messages import AIMessage, ToolMessage, HumanMessage, SystemMessage
 
 from security import ValidadorEntrada, ValidadorSalida, FiltroEtico, LimitadorTasa
 
@@ -132,6 +136,9 @@ viaje_actual = {
     "nombre": None, "origen": None, "destino": None,
     "fecha": None, "hora": None, "pasajeros": None
 }
+_ultimo_viaje = {}
+_esperando_confirmacion = False
+_esperando_correo = False
 
 def obtener_conexion():
     return sqlite3.connect(DB_FILE)
@@ -259,7 +266,7 @@ def guardar_datos_viaje(
 @tool
 def agendar_viaje_definitivo() -> str:
     """Finaliza y guarda el viaje en la base de datos cuando el cliente confirma."""
-    global viaje_actual
+    global viaje_actual, _ultimo_viaje, _esperando_confirmacion, _esperando_correo
     faltantes = [k for k, v in viaje_actual.items() if v is None]
     if faltantes:
         return f"Faltan datos: {faltantes}"
@@ -276,14 +283,55 @@ def agendar_viaje_definitivo() -> str:
     )
     conn.commit()
     conn.close()
+    _ultimo_viaje = dict(viaje_actual)
     viaje_actual = {k: None for k in viaje_actual}
-    return "Viaje guardado permanentemente en la base de datos."
+    _esperando_confirmacion = False
+    _esperando_correo = True
+    return "Viaje guardado permanentemente en la base de datos. Pide el correo del cliente para enviarle la confirmacion."
+
+@tool
+def enviar_correo_viaje(correo: str) -> str:
+    """Envía al cliente un correo de confirmacion con los detalles del viaje. Llama SOLO despues de agendar_viaje_definitivo y cuando el cliente ya dio su correo."""
+    global _esperando_correo
+    if not _ultimo_viaje or not _ultimo_viaje.get("nombre"):
+        return "ERROR: No hay un viaje confirmado para enviar."
+    if not GMAIL_REMITENTE or not GMAIL_APP_PASSWORD:
+        return "ERROR: Correo no configurado. Contacta al administrador."
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = GMAIL_REMITENTE
+        msg["To"] = correo
+        msg["Subject"] = "Viaje confirmado - Transportes Pardo"
+        d = _ultimo_viaje
+        body = (
+            "Viaje confirmado!\n"
+            "Gracias por escoger Transportes Pardo!\n\n"
+            "Informacion de tu viaje:\n\n"
+            f"Inicio del viaje: {d['origen']}\n"
+            f"Destino: {d['destino']}\n"
+            f"Fecha: {d['fecha']}\n"
+            f"Hora: {d['hora']}\n"
+            f"Cantidad de pasajeros: {d['pasajeros']}\n\n"
+            "Buen Viaje!"
+        )
+        msg.attach(MIMEText(body, "plain"))
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(GMAIL_REMITENTE, GMAIL_APP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        _esperando_correo = False
+        return "Correo enviado exitosamente."
+    except Exception as e:
+        _esperando_correo = False
+        return f"ERROR al enviar correo: {str(e)}"
 
 tools_map = {
     "guardar_datos_viaje": guardar_datos_viaje,
-    "agendar_viaje_definitivo": agendar_viaje_definitivo
+    "agendar_viaje_definitivo": agendar_viaje_definitivo,
+    "enviar_correo_viaje": enviar_correo_viaje
 }
-llm_with_tools = llm.bind_tools([guardar_datos_viaje, agendar_viaje_definitivo])
+llm_with_tools = llm.bind_tools([guardar_datos_viaje, agendar_viaje_definitivo, enviar_correo_viaje])
 
 CAMPOS = {"nombre": "Nombre", "origen": "Origen", "destino": "Destino", "fecha": "Fecha", "hora": "Hora", "pasajeros": "Pasajeros"}
 
@@ -305,46 +353,86 @@ def _resumen_confirmar(d: dict) -> str:
     lineas = [f"  {CAMPOS[k]}: {v}" for k, v in d.items() if v is not None]
     return "\n".join(lineas)
 
-prompt = ChatPromptTemplate.from_messages([
-    ("system", """Eres asistente de Transportes Pardo en Puerto Montt, Chile.
+SISTEMA = """Eres asistente de Transportes Pardo en Puerto Montt.
 
-Recolecta en orden: nombre, origen, destino, fecha, hora, pasajeros.
+Tienes 3 funciones disponibles. DEBES usarlas cuando corresponda:
 
-IMPORTANTE: Cuando el cliente te de cualquier informacion, DEBES llamar guardar_datos_viaje INMEDIATAMENTE con el texto exacto. Ej: cliente dice "manana" -> llamas guardar_datos_viaje(fecha="manana"). La funcion normaliza formatos libres.
+- guardar_datos_viaje: cuando el cliente te da nombre, origen, destino, fecha, hora o pasajeros. USA SIEMPRE.
+- agendar_viaje_definitivo: cuando el cliente confirma el viaje.
+- enviar_correo_viaje: cuando el cliente da su correo para la confirmacion.
 
-NUNCA describas las herramientas ni digas que estas llamando a una funcion. Solo responde natural.
+Reglas:
+- Pregunta un dato a la vez en orden: nombre -> origen -> destino -> fecha -> hora -> pasajeros.
+- Cuando el cliente responda con un dato, USA guardar_datos_viaje. No respondas sin haberla usado.
+- No describas las funciones. Responde natural.
+- Si dan datos fuera de orden, guardalos y pregunta el siguiente faltante.
 
 Datos guardados: {formulario_actual}
 Faltan: {faltan}
 
-Sobre ORIGEN y DESTINO: Si el cliente da un lugar ambiguo como "el mall", "la playa", "el aeropuerto", "el centro", "la costanera", pide mas precision (ej: "En Puerto Montt hay varios malls, cual prefieres?"). Para lugares claros como direcciones o nombres unicos, no preguntes de mas.
+Al confirmar: usa agendar_viaje_definitivo, pide correo, usa enviar_correo_viaje."""
 
-Habla natural, un dato a la vez. Cuando completes todos, da resumen y pregunta si confirma. Si confirma, llama agendar_viaje_definitivo y responde solo con felicitaciones."""),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("human", "{input}")
-])
-
-@chain
 def coordinar_agente(query_input: dict) -> dict:
-    global viaje_actual
-    query_input["formulario_actual"] = _formatear_viaje(viaje_actual)
-    query_input["faltan"] = ", ".join(_campos_faltantes(viaje_actual)) if not _todos_completos(viaje_actual) else "ninguno (todos completos)"
-    respuesta = (prompt | llm_with_tools).invoke(query_input)
-    if respuesta.tool_calls:
-        for tc in respuesta.tool_calls:
-            if tc["name"] in tools_map:
-                resultado = tools_map[tc["name"]].invoke(tc["args"])
-                query_input["formulario_actual"] = _formatear_viaje(viaje_actual)
-                query_input["faltan"] = ", ".join(_campos_faltantes(viaje_actual)) if not _todos_completos(viaje_actual) else "ninguno (todos completos)"
-                if resultado.startswith("ERROR DE AGENDAMIENTO"):
-                    query_input["formulario_actual"] += f"\nConflicto: {resultado}"
-        final = (prompt | llm).invoke(query_input)
-        texto = final.content
-        # Si estan todos completos y el LLM no pregunto confirmacion, la agregamos
-        if _todos_completos(viaje_actual) and "confirm" not in texto.lower() and "correct" not in texto.lower() and "registrado" not in texto.lower():
-            return {"output": _resumen_confirmar(viaje_actual) + "\n\n¿Todos los datos son correctos?"}
-        return {"output": texto}
-    return {"output": respuesta.content}
+    global viaje_actual, _esperando_confirmacion, _esperando_correo
+    session_id = query_input.get("config", {}).get("configurable", {}).get("session_id", "default")
+    history = obtener_historial(session_id)
+
+    # Build state display
+    if _esperando_correo and _ultimo_viaje:
+        estado = "Viaje CONFIRMADO:\n" + _resumen_confirmar(_ultimo_viaje) + "\n\nPendiente: correo del cliente para enviar confirmacion."
+        faltan = "correo del cliente"
+    elif _esperando_confirmacion:
+        estado = _formatear_viaje(viaje_actual)
+        faltan = "confirmacion del cliente"
+    else:
+        estado = _formatear_viaje(viaje_actual)
+        faltan = ", ".join(_campos_faltantes(viaje_actual)) if not _todos_completos(viaje_actual) else "ninguno"
+
+    prompt_msg = SystemMessage(content=SISTEMA.format(formulario_actual=estado, faltan=faltan))
+    history_msgs = history.messages
+    user_msg = HumanMessage(content=query_input["input"])
+    messages = [prompt_msg] + history_msgs + [user_msg]
+
+    # Add user message to history before LLM calls
+    history.add_user_message(query_input["input"])
+
+    # Call LLM with tools
+    response = llm_with_tools.invoke(messages)
+    if not response.tool_calls:
+        history.add_ai_message(response.content)
+        if _esperando_confirmacion and _todos_completos(viaje_actual):
+            _esperando_confirmacion = False
+        return {"output": response.content}
+
+    # Execute tool calls
+    tool_messages = [response]
+    for tc in response.tool_calls:
+        if tc["name"] in tools_map:
+            resultado = tools_map[tc["name"]].invoke(tc["args"])
+            tool_messages.append(ToolMessage(content=resultado, tool_call_id=tc["id"]))
+            # Update state
+            if _esperando_correo and _ultimo_viaje:
+                estado = "Viaje CONFIRMADO:\n" + _resumen_confirmar(_ultimo_viaje) + "\n\nPendiente: correo del cliente para enviar confirmacion."
+                faltan = "correo del cliente"
+            elif _esperando_confirmacion:
+                estado = _formatear_viaje(viaje_actual)
+                faltan = "confirmacion del cliente"
+            else:
+                estado = _formatear_viaje(viaje_actual)
+                faltan = ", ".join(_campos_faltantes(viaje_actual)) if not _todos_completos(viaje_actual) else "ninguno"
+
+    # Call LLM again with tool results in context
+    full_msgs = [prompt_msg] + history_msgs + tool_messages
+    final = llm.invoke(full_msgs)
+    history.add_ai_message(final.content)
+
+    # After tool call, if data complete, not expecting correo, and LLM didn't ask, force confirmation
+    if _todos_completos(viaje_actual) and not _esperando_correo:
+        txt = final.content.lower()
+        if not any(w in txt for w in ["confirm", "correcto", "todo bien"]):
+            _esperando_confirmacion = True
+            return {"output": _resumen_confirmar(viaje_actual) + "\n\n¿Todo esta correcto? Confirma para agendar el viaje."}
+    return {"output": final.content}
 
 historiales = {}
 
@@ -352,14 +440,6 @@ def obtener_historial(session_id: str) -> InMemoryChatMessageHistory:
     if session_id not in historiales:
         historiales[session_id] = InMemoryChatMessageHistory()
     return historiales[session_id]
-
-chatbot = RunnableWithMessageHistory(
-    coordinar_agente,
-    obtener_historial,
-    input_messages_key="input",
-    history_messages_key="chat_history",
-    output_messages_key="output"
-)
 
 def validar_entrada_segura(texto: str) -> dict:
     return validador_entrada.validar(texto)
@@ -392,11 +472,11 @@ def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
             "bloqueado": True
         }
     try:
-        respuesta = chatbot.invoke(
-            {"input": mensaje},
-            config={"configurable": {"session_id": session_id}}
-        )
-        texto = respuesta["output"]
+        resultado = coordinar_agente({
+            "input": mensaje,
+            "config": {"configurable": {"session_id": session_id}}
+        })
+        texto = resultado["output"]
     except Exception as e:
         error_str = str(e)
         if "Unauthorized" in error_str or "401" in error_str:

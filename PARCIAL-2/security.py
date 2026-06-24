@@ -22,7 +22,6 @@ PATRONES_INYECCION = [
 ]
 
 PATRONES_PII = {
-    "correo_electronico": re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
     "telefono_chile": re.compile(r"(?:\+?56)?\s*(?:9\s*\d{4}\s*\d{4}|[2-9]\d{7,8})"),
     "rut_chileno": re.compile(r"\b\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]\b"),
     "tarjeta_credito": re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b"),
