@@ -393,6 +393,20 @@ def coordinar_agente(query_input: dict) -> dict:
     user_msg = HumanMessage(content=query_input["input"])
     messages = [prompt_msg] + history_msgs + [user_msg]
 
+    # If expecting email, auto-extract and send
+    if _esperando_correo and _ultimo_viaje:
+        m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", query_input["input"])
+        if m:
+            correo = m.group(0)
+            resultado = enviar_correo_viaje.invoke({"correo": correo})
+            if resultado.startswith("ERROR"):
+                msg = "Hubo un error al enviar el correo: " + resultado
+            else:
+                msg = "Correo de confirmacion enviado exitosamente a " + correo + ". ¡Gracias por preferir Transportes Pardo!"
+            history.add_user_message(query_input["input"])
+            history.add_ai_message(msg)
+            return {"output": msg}
+
     # Add user message to history before LLM calls
     history.add_user_message(query_input["input"])
 
