@@ -23,7 +23,11 @@ from langchain_core.tools import tool
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage, SystemMessage
 
-from security import ValidadorEntrada, ValidadorSalida, FiltroEtico, LimitadorTasa
+from security import (
+    ValidadorEntrada, ValidadorSalida, FiltroEtico, LimitadorTasa,
+    GestorPresupuesto, SistemaConfianza, CacheLLM,
+    sistema_trazas, evaluar_matematica_segura
+)
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "transportes_pardo.db")
 
@@ -131,6 +135,9 @@ validador_entrada = ValidadorEntrada(max_longitud=2000)
 validador_salida = ValidadorSalida()
 filtro_etico = FiltroEtico()
 limitador = LimitadorTasa(max_peticiones=10, ventana_segundos=60.0)
+gestor_presupuesto = GestorPresupuesto(presupuesto_diario=1.0)
+sistema_confianza = SistemaConfianza(umbral_auto=0.8, umbral_revision=0.5)
+cache_llm = CacheLLM(max_size=100)
 
 viaje_actual = {
     "nombre": None, "origen": None, "destino": None,
@@ -465,36 +472,65 @@ def evaluar_etico(texto: str):
     return filtro_etico.evaluar(texto)
 
 def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
+    trace_id = sistema_trazas.crear_traza(session_id)
+
     reporte_entrada = validar_entrada_segura(mensaje)
     if not reporte_entrada["es_seguro"]:
+        sistema_trazas.agregar_evento(trace_id, "validacion", "Bloqueado por validacion de entrada", "error")
         return {
             "output": "Lo siento, no puedo procesar ese mensaje por seguridad.",
             "seguridad": reporte_entrada,
             "bloqueado": True
         }
+    sistema_trazas.agregar_evento(trace_id, "validacion", "Entrada validada OK")
+
     etico = evaluar_etico(mensaje)
     if not etico.es_seguro:
+        sistema_trazas.agregar_evento(trace_id, "etica", f"Bloqueado: {etico.categorias_detectadas}", "error")
         return {
             "output": "Lo siento, no puedo procesar solicitudes con ese contenido.",
             "seguridad": {"es_seguro": False, "razon": etico.mensaje},
             "bloqueado": True
         }
+    sistema_trazas.agregar_evento(trace_id, "etica", "Filtro etico OK")
+
     if not limitador.permitir():
+        sistema_trazas.agregar_evento(trace_id, "rate_limit", "Excedido", "error")
         return {
             "output": f"Limite de solicitudes excedido. Espera {limitador.ventana}s.",
             "seguridad": {"es_seguro": False, "riesgo_maximo": "rate_limit"},
             "bloqueado": True
         }
+    sistema_trazas.agregar_evento(trace_id, "rate_limit", "OK")
+
+    if not gestor_presupuesto.permitir_solicitud(mensaje):
+        sistema_trazas.agregar_evento(trace_id, "presupuesto", "Presupuesto diario excedido", "error")
+        return {
+            "output": "Lo siento, se ha alcanzado el limite de presupuesto del dia.",
+            "seguridad": {"es_seguro": False, "riesgo_maximo": "budget"},
+            "bloqueado": True
+        }
+    sistema_trazas.agregar_evento(trace_id, "presupuesto", "OK")
+
+    # Check cache
+    texto_cache = cache_llm.obtener(mensaje, "gpt-4o-mini")
+    if texto_cache:
+        sistema_trazas.agregar_evento(trace_id, "cache", "Respuesta desde cache")
+        return {"output": texto_cache, "seguridad": {"es_seguro": True}, "bloqueado": False, "cache": True}
+
     try:
+        sistema_trazas.agregar_evento(trace_id, "llm", "Invocando agente")
         resultado = coordinar_agente({
             "input": mensaje,
             "config": {"configurable": {"session_id": session_id}}
         })
         texto = resultado["output"]
+        sistema_trazas.agregar_evento(trace_id, "llm", "Respuesta obtenida")
     except Exception as e:
         error_str = str(e)
+        sistema_trazas.agregar_evento(trace_id, "llm", f"Error: {error_str[:80]}", "error")
         if "Unauthorized" in error_str or "401" in error_str:
-            texto = "Error de autenticación con el modelo. Verifica tu GITHUB_TOKEN en el archivo .env"
+            texto = "Error de autenticacion con el modelo. Verifica tu GITHUB_TOKEN en el archivo .env"
         else:
             texto = f"Error interno del asistente. Detalles: {error_str[:100]}"
         return {
@@ -502,11 +538,22 @@ def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
             "seguridad": {"es_seguro": False, "riesgo_maximo": "error_llm"},
             "bloqueado": True
         }
+
+    # Sanitizar salida
+    texto = validador_salida.sanitizar_salida(texto)
+
+    # Guardar en cache
+    cache_llm.guardar(mensaje, "gpt-4o-mini", texto)
+
+    gestor_presupuesto.registrar_uso("gpt-4o-mini", len(mensaje) // 4, len(texto) // 4)
+
     reporte_salida = validar_salida_segura(texto)
+    sistema_trazas.agregar_evento(trace_id, "completo", "Procesamiento finalizado")
     return {
         "output": texto,
         "seguridad": reporte_salida,
-        "bloqueado": False
+        "bloqueado": False,
+        "trace_id": trace_id
     }
 
 def listar_viajes() -> list[tuple]:
