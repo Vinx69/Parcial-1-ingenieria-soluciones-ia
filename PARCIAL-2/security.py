@@ -4,6 +4,7 @@ import time
 import json
 import uuid
 import hashlib
+import html
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, List
@@ -198,10 +199,41 @@ class ValidadorEntrada:
 
     def validar_contenido(self, texto: str) -> ResultadoValidacion:
         problemas = []
-        patrones_peligrosos = [r"<script[^>]*>", r"eval\(", r"exec\(", r"__import__", r"subprocess", r"os\.system"]
-        for p in patrones_peligrosos:
+        patrones_xss = [
+            r"<script[^>]*>.*?</script>",
+            r"<script[^>]*>",
+            r"<img[^>]*on\w+\s*=",
+            r"<iframe[^>]*>",
+            r"<frame[^>]*>",
+            r"<svg[^>]*on\w+\s*=",
+            r"<body[^>]*on\w+\s*=",
+            r"<input[^>]*on\w+\s*=",
+            r"<link[^>]*>",
+            r"<meta[^>]*>",
+            r"<object[^>]*>",
+            r"<embed[^>]*>",
+            r"<style[^>]*>.*?</style>",
+            r"<style[^>]*>",
+            r"on\w+\s*=\s*['\"][^'\"]*['\"]",
+            r"on\w+\s*=\s*\w+",
+            r"javascript\s*:",
+            r"vbscript\s*:",
+            r"data\s*:\s*text/html",
+            r"expression\s*\(",
+            r"eval\s*\(",
+            r"exec\s*\(",
+            r"__import__",
+            r"subprocess",
+            r"os\.system",
+        ]
+        for p in patrones_xss:
             if re.search(p, texto, re.IGNORECASE):
                 problemas.append(f"Codigo sospechoso: {p}")
+        # Detectar proporción alta de caracteres especiales (posible ofuscación)
+        if len(texto) > 20:
+            especiales = sum(1 for c in texto if c in "<>\"'{}();&|`$\\")
+            if especiales / len(texto) > 0.3:
+                problemas.append("Alta proporcion de caracteres especiales")
         if problemas:
             return ResultadoValidacion(es_valido=False, mensaje="; ".join(problemas), riesgo="alto")
         return ResultadoValidacion(es_valido=True, mensaje="Contenido valido")
@@ -242,6 +274,7 @@ class ValidadorSalida:
         return ResultadoValidacion(es_valido=True, mensaje="Sin PII en salida")
 
     def sanitizar_salida(self, respuesta: str) -> str:
+        respuesta = html.escape(respuesta)
         for tipo, patron in PATRONES_PII.items():
             respuesta = patron.sub(f"[{tipo.upper()}_REDACTADO]", respuesta)
         return respuesta

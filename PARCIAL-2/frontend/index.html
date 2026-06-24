@@ -223,13 +223,15 @@ function agregarBurbuja(texto, tipo) {
   const div = document.createElement('div');
   div.className = `flex items-start gap-3 max-w-[80%] ${align}`;
   if (tipo === 'user') {
-    div.innerHTML = `<div class="${userCls} p-4"><p class="text-[15px] leading-[22px]">${texto}</p></div>`;
+    div.innerHTML = `<div class="${userCls} p-4"><p class="text-[15px] leading-[22px]"></p></div>`;
+    div.firstElementChild.firstElementChild.textContent = texto;
   } else {
     div.innerHTML = `
       <div class="w-8 h-8 rounded-full bg-[#dfe3e8] flex-shrink-0 flex items-center justify-center">
         <span class="material-symbols-outlined text-[18px]">${tipo === 'error' ? 'warning' : 'person'}</span>
       </div>
-      <div class="${userCls} p-4"><p class="text-[15px] leading-[22px]">${texto}</p></div>`;
+      <div class="${userCls} p-4"><p class="text-[15px] leading-[22px]"></p></div>`;
+    div.lastElementChild.lastElementChild.textContent = texto;
   }
   area.appendChild(div);
   area.scrollTop = area.scrollHeight;
