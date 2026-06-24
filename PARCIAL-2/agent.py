@@ -529,10 +529,7 @@ def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
     except Exception as e:
         error_str = str(e)
         sistema_trazas.agregar_evento(trace_id, "llm", f"Error: {error_str[:80]}", "error")
-        if "Unauthorized" in error_str or "401" in error_str:
-            texto = "Error de autenticacion con el modelo. Verifica tu GITHUB_TOKEN en el archivo .env"
-        else:
-            texto = f"Error interno del asistente. Detalles: {error_str[:100]}"
+        texto = "Error interno del asistente. Intenta de nuevo mas tarde."
         return {
             "output": texto,
             "seguridad": {"es_seguro": False, "riesgo_maximo": "error_llm"},
