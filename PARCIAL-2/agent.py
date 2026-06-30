@@ -2,13 +2,15 @@ import os
 import re
 import sqlite3
 import smtplib
+from pathlib import Path
 from typing import Optional
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from dotenv import load_dotenv
-load_dotenv()
+_BASE = Path(__file__).parent
+load_dotenv(_BASE / ".env")
 
 os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")
 os.environ.setdefault("LANGCHAIN_DISABLED", "true")
