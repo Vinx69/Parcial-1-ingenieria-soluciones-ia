@@ -493,7 +493,21 @@ def evaluar_etico(texto: str):
     return filtro_etico.evaluar(texto)
 
 def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
+    global _esperando_correo
     trace_id = sistema_trazas.crear_traza(session_id)
+
+    # --- Detectar correo pendiente de envio (antes de validacion) ---
+    if _esperando_correo and _ultimo_viaje:
+        m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", mensaje)
+        if m:
+            sistema_trazas.agregar_evento(trace_id, "correo", "Enviando correo de confirmacion")
+            resultado = enviar_correo_viaje.invoke({"correo": m.group(0)})
+            if resultado.startswith("ERROR"):
+                texto = "Hubo un error al enviar el correo: " + resultado
+            else:
+                texto = "Correo de confirmacion enviado exitosamente a " + m.group(0) + ". ¡Gracias por preferir Transportes Pardo!"
+                _esperando_correo = False
+            return {"output": texto, "seguridad": {"es_seguro": True}, "bloqueado": False}
 
     reporte_entrada = validar_entrada_segura(mensaje)
     if not reporte_entrada["es_seguro"]:
