@@ -487,18 +487,14 @@ def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
     global _esperando_correo, _ultimo_viaje
     trace_id = sistema_trazas.crear_traza(session_id)
 
-    # --- Detectar correo pendiente de envio ---
-    if _ultimo_viaje and _ultimo_viaje.get("nombre"):
-        m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", mensaje)
-        if m:
-            sistema_trazas.agregar_evento(trace_id, "correo", "Enviando correo de confirmacion")
-            resultado = enviar_correo(m.group(0))
-            if resultado.startswith("ERROR"):
-                texto = "Hubo un error al enviar el correo: " + resultado
-            else:
-                texto = "Correo de confirmacion enviado exitosamente a " + m.group(0) + ". ¡Gracias por preferir Transportes Pardo!"
-                _ultimo_viaje = {}
-            return {"output": texto, "seguridad": {"es_seguro": True}, "bloqueado": False}
+    # --- Detectar correo y enviar confirmacion ---
+    m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", mensaje)
+    if m:
+        resultado = enviar_correo(m.group(0))
+        if not resultado.startswith("ERROR"):
+            return {"output": "Correo de confirmacion enviado exitosamente a " + m.group(0) + ". ¡Gracias por preferir Transportes Pardo!", "seguridad": {"es_seguro": True}, "bloqueado": False}
+        if not resultado.startswith("ERROR: No hay un viaje confirmado"):
+            return {"output": "Hubo un error al enviar el correo: " + resultado, "seguridad": {"es_seguro": True}, "bloqueado": False}
 
     reporte_entrada = validar_entrada_segura(mensaje)
     if not reporte_entrada["es_seguro"]:
