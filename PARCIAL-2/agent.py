@@ -298,9 +298,8 @@ def agendar_viaje_definitivo() -> str:
     _esperando_correo = True
     return "Viaje guardado permanentemente en la base de datos. Pide el correo del cliente para enviarle la confirmacion."
 
-@tool
-def enviar_correo_viaje(correo: str) -> str:
-    """Envía al cliente un correo de confirmacion con los detalles del viaje. Llama SOLO despues de agendar_viaje_definitivo y cuando el cliente ya dio su correo."""
+def enviar_correo(correo: str) -> str:
+    """Envía correo de confirmacion directamente (sin @tool)."""
     global _esperando_correo
     if not _ultimo_viaje or not _ultimo_viaje.get("nombre"):
         return "ERROR: No hay un viaje confirmado para enviar."
@@ -335,6 +334,11 @@ def enviar_correo_viaje(correo: str) -> str:
         _esperando_correo = False
         return f"ERROR al enviar correo: {str(e)}"
 
+@tool
+def enviar_correo_viaje(correo: str) -> str:
+    """Envía al cliente un correo de confirmacion con los detalles del viaje. Llama SOLO despues de agendar_viaje_definitivo y cuando el cliente ya dio su correo."""
+    return enviar_correo(correo)
+
 tools_map = {
     "guardar_datos_viaje": guardar_datos_viaje,
     "agendar_viaje_definitivo": agendar_viaje_definitivo,
@@ -367,12 +371,14 @@ SISTEMA = """Eres asistente de Transportes Pardo en Puerto Montt.
 Tienes 3 funciones. DEBES usarlas cuando corresponda:
 
 1. guardar_datos_viaje: cuando el cliente te da NOMBRE, ORIGEN, DESTINO, FECHA, HORA o PASAJEROS.
-2. agendar_viaje_definitivo: cuando el cliente CONFIRMA el viaje. NO preguntes datos faltantes si ya estan todos.
+2. agendar_viaje_definitivo: cuando el cliente CONFIRMA el viaje.
 3. enviar_correo_viaje: cuando el cliente da su CORREO para la confirmacion.
 
 Reglas:
 - Pregunta un dato a la vez en orden: nombre -> origen -> destino -> fecha -> hora -> pasajeros.
-- Cuando el cliente responda con un dato, USA guardar_datos_viaje INMEDIATAMENTE.
+- Cuando el cliente responda con UN DATO, USA guardar_datos_viaje INMEDIATAMENTE con el texto EXACTO del cliente.
+- Para FECHA: pasa el texto exacto del cliente (ej: "manana", "17 de julio", "1/1/2026"). La funcion normaliza automaticamente.
+- Para HORA: pasa el texto exacto del cliente (ej: "8am", "8:00", "1pm", "8 de la manana", "13:00"). La funcion normaliza automaticamente. NUNCA pidas formato 24h.
 - Cuando todos los datos esten completos y el cliente confirme, USA agendar_viaje_definitivo INMEDIATAMENTE.
 - No preguntes datos que ya estan guardados. Revisa siempre "Faltan" abajo.
 - No describas las funciones. Responde natural.
@@ -388,22 +394,7 @@ def coordinar_agente(query_input: dict) -> dict:
     history = obtener_historial(session_id)
     texto = query_input["input"]
 
-    # --- PRE-LLM: manejar confirmacion y correo directamente ---
-
-    # Si esperamos correo, extraerlo y enviar sin LLM
-    if _esperando_correo and _ultimo_viaje:
-        m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", texto)
-        if m:
-            resultado = enviar_correo_viaje.invoke({"correo": m.group(0)})
-            if resultado.startswith("ERROR"):
-                msg = "Hubo un error al enviar el correo: " + resultado
-            else:
-                msg = "Correo de confirmacion enviado exitosamente a " + m.group(0) + ". ¡Gracias por preferir Transportes Pardo!"
-            history.add_user_message(texto)
-            history.add_ai_message(msg)
-            return {"output": msg}
-
-    # Si esperamos confirmacion y el usuario confirma, agendar directamente
+    # --- PRE-LLM: si esperamos confirmacion y el usuario confirma, agendar directamente ---
     confirmacion = re.search(r'\b(si|sip|sí|ok|vale|dale|confirmar|confirmo|correcto|todo\s*bien|todo\s*correcto|adelante)\b', texto, re.IGNORECASE)
     if _esperando_confirmacion and _todos_completos(viaje_actual) and confirmacion:
         resultado = agendar_viaje_definitivo.invoke({})
@@ -501,7 +492,7 @@ def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
         m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", mensaje)
         if m:
             sistema_trazas.agregar_evento(trace_id, "correo", "Enviando correo de confirmacion")
-            resultado = enviar_correo_viaje.invoke({"correo": m.group(0)})
+            resultado = enviar_correo(m.group(0))
             if resultado.startswith("ERROR"):
                 texto = "Hubo un error al enviar el correo: " + resultado
             else:
