@@ -1,0 +1,280 @@
+================================================================================
+              TRANSPORTES PARDO - SISTEMA DE AGENDAMIENTO DE VIAJES
+                     Documentacion Tecnica y Funcional
+================================================================================
+
+1. DESCRIPCION GENERAL
+--------------------------------------------------------------------------------
+Sistema de chat inteligente para la empresa Transportes Pardo (Puerto Montt,
+Chile) que permite a los clientes agendar viajes mediante conversacion en
+lenguaje natural. Incluye un asistente con IA, multiple s capas de seguridad,
+panel de monitoreo en tiempo real y envio de confirmaciones por correo.
+
+
+2. ARQUITECTURA DEL SISTEMA
+--------------------------------------------------------------------------------
+
+  USUARIO (Browser)
+       |
+       v
+  [index.html]  ---> Frontend SPA (Tailwind CSS)
+       |
+       | POST /api/chat
+       v
+  [backend.py]  ---> API REST (FastAPI + Uvicorn)
+       |
+       v
+  [agent.py]    ---> Logica del agente (LangChain + LLM)
+       |
+       v
+  [security.py] ---> 7 modulos de seguridad
+       |
+       v
+  [SQLite DB]   ---> Base de datos local (clientes, lugares, viajes)
+
+
+3. COMPONENTES DEL SISTEMA
+--------------------------------------------------------------------------------
+
+3.1. backend.py (API REST)
+    - Framework: FastAPI corriendo en puerto 8000/8082
+    - Endpoints:
+        GET  /api/health    -> Health check del servidor
+        POST /api/chat      -> Procesa mensaje del usuario
+        GET  /api/seguridad -> Metricas de seguridad en vivo
+        GET  /api/viajes    -> Lista de viajes registrados
+    - Sirve archivos estaticos del frontend
+    - Middleware CORS abierto para desarrollo
+
+3.2. agent.py (Agente Conversacional)
+    - Modelo: gpt-4o-mini via GitHub Models (Azure AI)
+    - Framework: LangChain con soporte de herramientas (tools)
+    - Herramientas disponibles:
+        a) guardar_datos_viaje: Registra datos parciales del viaje
+        b) agendar_viaje_definitivo: Finaliza y guarda en BD
+        c) enviar_correo_viaje: Envia confirmacion por Gmail SMTP
+    - Sistema de memoria por sesion (InMemoryChatMessageHistory)
+    - Flujo de trabajo:
+        1. Pregunta datos uno a uno (nombre, origen, destino, fecha,
+           hora, pasajeros)
+        2. Normaliza fechas (formato chileno, "manana", "5 de enero")
+        3. Normaliza horas ("8am", "1pm", "1 de la tarde", "13:00")
+        4. Detecta conflictos de horario en la BD
+        5. Solicita confirmacion antes de agendar
+        6. Envia correo de confirmacion al cliente
+    - Parseo de fechas: soporta "hoy", "manana", "pasado manana",
+      DD-MM-AAAA, DD/MM/AAAA, "DD de MES", "MES DD"
+    - Parseo de horas: soporta formato 12h (am/pm), 24h,
+      "1 de la tarde", "medianoche", "mediodia"
+
+3.3. security.py (Modulo de Seguridad)
+    Contiene 7 sistemas de proteccion independientes:
+
+    a) ValidadorEntrada (linea 159)
+       - Detecta inyeccion de prompt (ignorar instrucciones,
+         jailbreak, DAN mode, system prompt hijacking)
+       - Detecta PII (RUT chileno, telefono, tarjeta de credito,
+         pasaporte)
+       - Valida longitud maxima (2000 caracteres)
+       - Validacion de contenido XSS (25 patrones):
+           . Tags HTML: script, img, iframe, frame, svg, body,
+             input, link, meta, object, embed, style
+           . Catch-all: cualquier tag <tagName ...>
+           . Manejadores de eventos: onerror, onload, onclick,
+             onmouseover, etc.
+           . Protocolos peligrosos: javascript:, vbscript:,
+             data:text/html
+           . Funciones peligrosas: eval(), exec(), expression()
+           . Codigo Python peligroso: __import__, subprocess,
+             os.system
+       - Detecta alta proporcion de caracteres especiales
+         (ofuscacion)
+
+    b) ValidadorSalida (linea 266)
+       - Escape HTML en respuestas (html.escape)
+       - Redaccion de PII en salidas del modelo (reemplaza
+         numeros de telefono, RUT, tarjetas, pasaportes)
+
+    c) FiltroEtico (linea 290)
+       - Bloquea categorias: violencia, contenido ilegal,
+         manipulacion/desinformacion
+       - Busqueda por palabras clave con limites de palabra
+
+    d) LimitadorTasa (linea 313)
+       - Maximo 10 peticiones por ventana de 60 segundos
+       - Previene abuso del servicio (DoS)
+
+    e) GestorPresupuesto (linea 127)
+       - Presupuesto diario configurable ($1.00 USD default)
+       - Estimacion de tokens y costos por modelo
+       - Bloquea solicitudes si excede el presupuesto diario
+
+    f) SistemaConfianza (linea 359)
+       - Umbrales: AUTO_RESPONDER (>80%), ESCALAR_HUMANO
+         (50-80%), RECHAZAR (<50%)
+       - Sistema preparado para human-in-the-loop
+
+    g) SistemaTrazas (linea 66)
+       - Trazabilidad completa por Trace ID (uuid)
+       - Registro de eventos por etapa
+       - Deteccion de anomalias (alta latencia, eventos rapidos)
+       - Totalizacion de errores y duracion
+
+    h) CacheLLM (linea 408)
+       - Cache LRU con maximo 100 entradas
+       - Clave basada en SHA256 del prompt + modelo
+       - Evita llamadas repetitivas al LLM
+
+    i) DetectorSesgos (linea 374)
+       - Compara respuestas entre grupos demograficos
+       - Similaridad coseno con vectorizacion TF-like
+       - Alerta si similitud < 0.5 (posible sesgo)
+
+    j) Evaluacion Matematica Segura (linea 335)
+       - Evaluacion de expresiones aritmeticas usando AST
+       - Bloquea operaciones peligrosas (solo permite
+         +, -, *, /, **, %, negacion)
+
+3.4. frontend/index.html (Interfaz de Usuario)
+    - Single Page Application (SPA) con Tailwind CSS
+    - Diseno responsive con sidebar de navegacion
+    - Dos pantallas:
+        a) Inicio: hero, instrucciones, formatos aceptados
+        b) Chat: burbujas de conversacion, input, indicador
+           "escribiendo..."
+    - Panel lateral con metricas en vivo (peticiones, viajes)
+    - Protegido contra XSS: usa textContent en vez de innerHTML
+      para contenido del usuario
+    - Carga asincronica de metricas via APIs
+
+3.5. Base de Datos (SQLite)
+    - Archivo: transportes_pardo.db
+    - Tablas:
+        clientes (id, nombre)
+        lugares  (id, nombre)
+        viajes   (id, cliente_id, origen_id, destino_id,
+                  fecha, hora, pasajeros, created_at)
+    - Relaciones: viajes -> clientes (FK), viajes -> lugares (FK)
+
+
+4. FLUJO DE PROCESAMIENTO DE MENSAJES
+--------------------------------------------------------------------------------
+
+  Mensaje del usuario
+       |
+       v
+  1. Validacion de entrada (ValidadorEntrada)
+     - Inyeccion de prompt?
+     - PII detectado?
+     - Longitud valida?
+     - Contenido XSS/HTML?
+       |--- Si bloquea -> "Lo siento, no puedo procesar..."
+       |
+       v
+  2. Filtro Etico (FiltroEtico)
+     - Contenido violento/ilegal?
+       |--- Si bloquea -> "Lo siento, no puedo procesar..."
+       |
+       v
+  3. Rate Limit (LimitadorTasa)
+     - Max 10 req / 60s
+       |--- Excedido -> "Limite de solicitudes excedido..."
+       |
+       v
+  4. Presupuesto (GestorPresupuesto)
+     - Costo estimado dentro del presupuesto?
+       |--- Excedido -> "Limite de presupuesto alcanzado..."
+       |
+       v
+  5. Cache (CacheLLM)
+     - Respuesta igual ya procesada?
+       |--- Si -> retorna respuesta cachead.
+       |
+       v
+  6. LLM (LangChain + gpt-4o-mini)
+     - Coordina herramientas (guardar, agendar, correo)
+     - Mantiene historial por sesion
+       |--- Error -> "Error interno del asistente."
+       |
+       v
+  7. Sanitizacion de salida (ValidadorSalida)
+     - Escape HTML
+     - Redaccion de PII
+       |
+       v
+  8. Validacion de salida
+     - Verificar PII residual
+       |
+       v
+  Respuesta al usuario + metricas de trazabilidad
+
+
+5. MEDIDAS DE CIBERSEGURIDAD IMPLEMENTADAS
+--------------------------------------------------------------------------------
+
+  Amenaza                          | Mitigacion
+  ---------------------------------|--------------------------------------------
+  Inyeccion de prompt              | 30 patrones de deteccion
+  Cross-Site Scripting (XSS)       | 25 patrones + catch-all HTML tags
+  Fuga de informacion (PII)        | Deteccion y redaccion automatica
+  HTML injection en frontend       | textContent en vez de innerHTML
+  Fuga de errores del LLM          | Mensajes genericos, sin detalles internos
+  Ataque de fuerza bruta           | Rate limiting (10 req/60s)
+  Abuso de presupuesto             | Limite diario de $1.00 USD
+  Jailbreaking                     | Deteccion de modos DAN, developer, etc.
+  Ingenieria social                | Filtro etico por categorias
+  Cache poisoning                  | Cache con clave hash SHA256
+  Evaluacion insegura              | AST parser para expresiones matematicas
+
+
+6. REQUISITOS DE INSTALACION
+--------------------------------------------------------------------------------
+
+  - Python 3.11+
+  - Dependencias (requirements-docker.txt):
+      fastapi>=0.100.0
+      uvicorn>=0.20.0
+      pydantic>=2.0.0
+      python-dotenv>=1.0.0
+      langchain-openai>=0.3.0
+      langchain-core>=0.3.0
+
+  - Variables de entorno (.env):
+      GITHUB_TOKEN=      (Token de GitHub Models / Azure AI)
+      GMAIL_REMITENTE=   (Correo para envio de confirmaciones)
+      GMAIL_APP_PASSWORD=(App password de Gmail)
+
+
+7. DESPLIEGUE
+--------------------------------------------------------------------------------
+
+  Docker:
+      docker build -t transportes-pardo .
+      docker run -d -p 8000:8000 --env-file .env transportes-pardo
+
+  Directo:
+      pip install -r requirements-docker.txt
+      uvicorn backend:app --host 0.0.0.0 --port 8000
+
+
+8. ESTRUCTURA DE ARCHIVOS
+--------------------------------------------------------------------------------
+
+  PARCIAL-2/
+    backend.py              -> API REST (FastAPI)
+    agent.py                -> Agente conversacional (LangChain + LLM)
+    security.py             -> Modulo de seguridad (7 subsistemas)
+    transportes_pardo.db    -> Base de datos SQLite
+    frontend/
+      index.html            -> SPA con Tailwind CSS
+    Dockerfile              -> Contenedor Docker
+    requirements-docker.txt -> Dependencias Python
+    DESIGN.md               -> Sistema de diseno (guias visuales)
+    .env                    -> Configuracion de entorno
+    .dockerignore           -> Exclusiones Docker
+    Agente.ipynb            -> Notebook de desarrollo
+
+
+================================================================================
+  FIN DEL DOCUMENTO
+================================================================================

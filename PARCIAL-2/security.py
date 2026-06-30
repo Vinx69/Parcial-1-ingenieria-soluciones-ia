@@ -227,6 +227,9 @@ class ValidadorEntrada:
             r"subprocess",
             r"os\.system",
         ]
+        # Bloquear referencias a archivos de imagen (el modelo intenta leerlos)
+        if re.search(r'\b\w+\.(png|jpg|jpeg|gif|bmp|webp|svg|ico)\b', texto, re.IGNORECASE):
+            problemas.append("Referencia a archivo de imagen bloqueada")
         for p in patrones_xss:
             if re.search(p, texto, re.IGNORECASE):
                 problemas.append(f"Codigo sospechoso: {p}")

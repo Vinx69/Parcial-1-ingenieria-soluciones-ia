@@ -539,6 +539,11 @@ def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
     # Sanitizar salida
     texto = validador_salida.sanitizar_salida(texto)
 
+    # Bloquear respuestas del modelo que contengan errores internos
+    if re.search(r"Cannot read|does not support image|no soporta imagen", texto, re.IGNORECASE):
+        sistema_trazas.agregar_evento(trace_id, "filtro_salida", "Respuesta con error tecnico bloqueada", "error")
+        texto = "Lo siento, hubo un error procesando tu mensaje. Intenta con otro texto."
+
     # Guardar en cache
     cache_llm.guardar(mensaje, "gpt-4o-mini", texto)
 
