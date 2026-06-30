@@ -362,97 +362,116 @@ def _resumen_confirmar(d: dict) -> str:
 
 SISTEMA = """Eres asistente de Transportes Pardo en Puerto Montt.
 
-Tienes 3 funciones disponibles. DEBES usarlas cuando corresponda:
+Tienes 3 funciones. DEBES usarlas cuando corresponda:
 
-- guardar_datos_viaje: cuando el cliente te da nombre, origen, destino, fecha, hora o pasajeros. USA SIEMPRE.
-- agendar_viaje_definitivo: cuando el cliente confirma el viaje.
-- enviar_correo_viaje: cuando el cliente da su correo para la confirmacion.
+1. guardar_datos_viaje: cuando el cliente te da NOMBRE, ORIGEN, DESTINO, FECHA, HORA o PASAJEROS.
+2. agendar_viaje_definitivo: cuando el cliente CONFIRMA el viaje. NO preguntes datos faltantes si ya estan todos.
+3. enviar_correo_viaje: cuando el cliente da su CORREO para la confirmacion.
 
 Reglas:
 - Pregunta un dato a la vez en orden: nombre -> origen -> destino -> fecha -> hora -> pasajeros.
-- Cuando el cliente responda con un dato, USA guardar_datos_viaje. No respondas sin haberla usado.
+- Cuando el cliente responda con un dato, USA guardar_datos_viaje INMEDIATAMENTE.
+- Cuando todos los datos esten completos y el cliente confirme, USA agendar_viaje_definitivo INMEDIATAMENTE.
+- No preguntes datos que ya estan guardados. Revisa siempre "Faltan" abajo.
 - No describas las funciones. Responde natural.
-- Si dan datos fuera de orden, guardalos y pregunta el siguiente faltante.
 
 Datos guardados: {formulario_actual}
 Faltan: {faltan}
 
-Al confirmar: usa agendar_viaje_definitivo, pide correo, usa enviar_correo_viaje."""
+Al confirmar: usa agendar_viaje_definitivo. Luego pide correo y usa enviar_correo_viaje."""
 
 def coordinar_agente(query_input: dict) -> dict:
     global viaje_actual, _esperando_confirmacion, _esperando_correo
     session_id = query_input.get("config", {}).get("configurable", {}).get("session_id", "default")
     history = obtener_historial(session_id)
+    texto = query_input["input"]
 
-    # Build state display
+    # --- PRE-LLM: manejar confirmacion y correo directamente ---
+
+    # Si esperamos correo, extraerlo y enviar sin LLM
     if _esperando_correo and _ultimo_viaje:
-        estado = "Viaje CONFIRMADO:\n" + _resumen_confirmar(_ultimo_viaje) + "\n\nPendiente: correo del cliente para enviar confirmacion."
+        m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", texto)
+        if m:
+            resultado = enviar_correo_viaje.invoke({"correo": m.group(0)})
+            if resultado.startswith("ERROR"):
+                msg = "Hubo un error al enviar el correo: " + resultado
+            else:
+                msg = "Correo de confirmacion enviado exitosamente a " + m.group(0) + ". ¡Gracias por preferir Transportes Pardo!"
+            history.add_user_message(texto)
+            history.add_ai_message(msg)
+            return {"output": msg}
+
+    # Si esperamos confirmacion y el usuario confirma, agendar directamente
+    confirmacion = re.search(r'\b(si|sip|sí|ok|vale|dale|confirmar|confirmo|correcto|todo\s*bien|todo\s*correcto|adelante)\b', texto, re.IGNORECASE)
+    if _esperando_confirmacion and _todos_completos(viaje_actual) and confirmacion:
+        resultado = agendar_viaje_definitivo.invoke({})
+        if resultado.startswith("ERROR") or "Faltan" in resultado:
+            _esperando_confirmacion = False
+            msg = "Parece que falta informacion. ¿Podemos empezar de nuevo? ¿Cual es tu nombre?"
+        else:
+            _esperando_confirmacion = False
+            _esperando_correo = True
+            msg = "Viaje confirmado. Dame tu correo para enviarte la confirmacion."
+        history.add_user_message(texto)
+        history.add_ai_message(msg)
+        return {"output": msg}
+
+    # --- Construir estado del formulario ---
+    if _esperando_correo and _ultimo_viaje:
+        estado = "Viaje CONFIRMADO:\n" + _resumen_confirmar(_ultimo_viaje) + "\n\nPendiente: correo del cliente."
         faltan = "correo del cliente"
     elif _esperando_confirmacion:
         estado = _formatear_viaje(viaje_actual)
-        faltan = "confirmacion del cliente"
+        faltan = "confirmacion del cliente (responde si, ok, correcto)"
     else:
         estado = _formatear_viaje(viaje_actual)
         faltan = ", ".join(_campos_faltantes(viaje_actual)) if not _todos_completos(viaje_actual) else "ninguno"
 
     prompt_msg = SystemMessage(content=SISTEMA.format(formulario_actual=estado, faltan=faltan))
     history_msgs = history.messages
-    user_msg = HumanMessage(content=query_input["input"])
+    user_msg = HumanMessage(content=texto)
     messages = [prompt_msg] + history_msgs + [user_msg]
+    history.add_user_message(texto)
 
-    # If expecting email, auto-extract and send
-    if _esperando_correo and _ultimo_viaje:
-        m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", query_input["input"])
-        if m:
-            correo = m.group(0)
-            resultado = enviar_correo_viaje.invoke({"correo": correo})
-            if resultado.startswith("ERROR"):
-                msg = "Hubo un error al enviar el correo: " + resultado
-            else:
-                msg = "Correo de confirmacion enviado exitosamente a " + correo + ". ¡Gracias por preferir Transportes Pardo!"
-            history.add_user_message(query_input["input"])
-            history.add_ai_message(msg)
-            return {"output": msg}
-
-    # Add user message to history before LLM calls
-    history.add_user_message(query_input["input"])
-
-    # Call LLM with tools
+    # --- LLM call ---
     response = llm_with_tools.invoke(messages)
+
+    # Sin tool calls: devolver respuesta y forzar confirmacion si falta
     if not response.tool_calls:
         history.add_ai_message(response.content)
-        if _esperando_confirmacion and _todos_completos(viaje_actual):
-            _esperando_confirmacion = False
+        if _todos_completos(viaje_actual) and not _esperando_correo and not _esperando_confirmacion:
+            _esperando_confirmacion = True
+            return {"output": _resumen_confirmar(viaje_actual) + "\n\n¿Todo esta correcto? Confirma para agendar el viaje."}
         return {"output": response.content}
 
-    # Execute tool calls
+    # Ejecutar tool calls
     tool_messages = [response]
+    agendado = False
     for tc in response.tool_calls:
         if tc["name"] in tools_map:
             resultado = tools_map[tc["name"]].invoke(tc["args"])
             tool_messages.append(ToolMessage(content=resultado, tool_call_id=tc["id"]))
-            # Update state
-            if _esperando_correo and _ultimo_viaje:
-                estado = "Viaje CONFIRMADO:\n" + _resumen_confirmar(_ultimo_viaje) + "\n\nPendiente: correo del cliente para enviar confirmacion."
-                faltan = "correo del cliente"
-            elif _esperando_confirmacion:
-                estado = _formatear_viaje(viaje_actual)
-                faltan = "confirmacion del cliente"
-            else:
-                estado = _formatear_viaje(viaje_actual)
-                faltan = ", ".join(_campos_faltantes(viaje_actual)) if not _todos_completos(viaje_actual) else "ninguno"
+            if tc["name"] == "agendar_viaje_definitivo":
+                agendado = True
 
-    # Call LLM again with tool results in context
+    # Si se agendo, no preguntar de nuevo, pedir correo
+    if agendado:
+        _esperando_confirmacion = False
+        _esperando_correo = True
+        msg = "Viaje confirmado. Dame tu correo para enviarte la confirmacion."
+        history.add_ai_message(msg)
+        return {"output": msg}
+
+    # Llamar LLM de nuevo con resultados de herramientas
     full_msgs = [prompt_msg] + history_msgs + tool_messages
     final = llm.invoke(full_msgs)
     history.add_ai_message(final.content)
 
-    # After tool call, if data complete, not expecting correo, and LLM didn't ask, force confirmation
-    if _todos_completos(viaje_actual) and not _esperando_correo:
-        txt = final.content.lower()
-        if not any(w in txt for w in ["confirm", "correcto", "todo bien"]):
-            _esperando_confirmacion = True
-            return {"output": _resumen_confirmar(viaje_actual) + "\n\n¿Todo esta correcto? Confirma para agendar el viaje."}
+    # Forzar confirmacion si todos los datos estan completos
+    if _todos_completos(viaje_actual) and not _esperando_correo and not _esperando_confirmacion:
+        _esperando_confirmacion = True
+        return {"output": _resumen_confirmar(viaje_actual) + "\n\n¿Todo esta correcto? Confirma para agendar el viaje."}
+
     return {"output": final.content}
 
 historiales = {}
