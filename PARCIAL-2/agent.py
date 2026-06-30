@@ -493,7 +493,7 @@ def evaluar_etico(texto: str):
     return filtro_etico.evaluar(texto)
 
 def procesar_mensaje(mensaje: str, session_id: str = "default") -> dict:
-    global _esperando_correo
+    global _esperando_correo, _ultimo_viaje
     trace_id = sistema_trazas.crear_traza(session_id)
 
     # --- Detectar correo pendiente de envio ---
