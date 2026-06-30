@@ -368,25 +368,26 @@ def _resumen_confirmar(d: dict) -> str:
 
 SISTEMA = """Eres asistente de Transportes Pardo en Puerto Montt.
 
-Tienes 3 funciones. DEBES usarlas cuando corresponda:
+TIENES QUE PREGUNTAR CADA DATO EN ORDEN: nombre -> origen -> destino -> fecha -> hora -> pasajeros.
+No saltees ningun dato. NO digas que el viaje esta confirmado hasta tenerlos todos.
 
-1. guardar_datos_viaje: cuando el cliente te da NOMBRE, ORIGEN, DESTINO, FECHA, HORA o PASAJEROS.
-2. agendar_viaje_definitivo: cuando el cliente CONFIRMA el viaje.
-3. enviar_correo_viaje: cuando el cliente da su CORREO para la confirmacion.
+Funciones disponibles:
+1. guardar_datos_viaje: cuando el cliente te da nombre, origen, destino, fecha, hora o pasajeros.
+   USA SIEMPRE con el texto EXACTO del cliente. La funcion normaliza automaticamente.
+2. agendar_viaje_definitivo: SOLO cuando el cliente CONFIRMA y tienes TODOS los datos.
+3. enviar_correo_viaje: cuando el cliente da su correo.
 
-Reglas:
-- Pregunta un dato a la vez en orden: nombre -> origen -> destino -> fecha -> hora -> pasajeros.
-- Cuando el cliente responda con UN DATO, USA guardar_datos_viaje INMEDIATAMENTE con el texto EXACTO del cliente.
-- Para FECHA: pasa el texto exacto del cliente (ej: "manana", "17 de julio", "1/1/2026"). La funcion normaliza automaticamente.
-- Para HORA: pasa el texto exacto del cliente (ej: "8am", "8:00", "1pm", "8 de la manana", "13:00"). La funcion normaliza automaticamente. NUNCA pidas formato 24h.
-- Cuando todos los datos esten completos y el cliente confirme, USA agendar_viaje_definitivo INMEDIATAMENTE.
-- No preguntes datos que ya estan guardados. Revisa siempre "Faltan" abajo.
-- No describas las funciones. Responde natural.
+REGLAS ESTRICTAS:
+- FECHA: pasa el texto exacto (ej: "manana", "17 de julio"). NUNCA pidas formato.
+- HORA: pasa el texto exacto (ej: "8am", "8:00", "1pm"). NUNCA pidas formato 24h.
+- Cuando el cliente te da un valor, USA guardar_datos_viaje y PREGUNTA el siguiente dato faltante.
+- NO digas "Viaje confirmado" ni pidas correo hasta que TODOS los datos esten guardados.
+- Revisa siempre "Faltan" abajo. Eso indica que datos faltan.
 
 Datos guardados: {formulario_actual}
 Faltan: {faltan}
 
-Al confirmar: usa agendar_viaje_definitivo. Luego pide correo y usa enviar_correo_viaje."""
+Cuando todos los datos esten y el cliente confirme: usa agendar_viaje_definitivo."""
 
 def coordinar_agente(query_input: dict) -> dict:
     global viaje_actual, _esperando_confirmacion, _esperando_correo
@@ -432,6 +433,12 @@ def coordinar_agente(query_input: dict) -> dict:
     # Sin tool calls: devolver respuesta y forzar confirmacion si falta
     if not response.tool_calls:
         history.add_ai_message(response.content)
+        txt = response.content.lower()
+        # Si faltan datos y el LLM habla de confirmacion, redirigir
+        if not _todos_completos(viaje_actual) and any(w in txt for w in ["confirmado", "correo", "enviar", "dame tu correo"]):
+            faltantes = _campos_faltantes(viaje_actual)
+            msg = "Aun faltan datos: " + ", ".join(faltantes) + ". Por favor, proporciona " + faltantes[0] + "."
+            return {"output": msg}
         if _todos_completos(viaje_actual) and not _esperando_correo and not _esperando_confirmacion:
             _esperando_confirmacion = True
             return {"output": _resumen_confirmar(viaje_actual) + "\n\n¿Todo esta correcto? Confirma para agendar el viaje."}
@@ -464,6 +471,14 @@ def coordinar_agente(query_input: dict) -> dict:
     if _todos_completos(viaje_actual) and not _esperando_correo and not _esperando_confirmacion:
         _esperando_confirmacion = True
         return {"output": _resumen_confirmar(viaje_actual) + "\n\n¿Todo esta correcto? Confirma para agendar el viaje."}
+
+    # Si faltan datos pero el LLM habla de confirmacion o correo, redirigir
+    if not _todos_completos(viaje_actual):
+        txt = final.content.lower()
+        if any(w in txt for w in ["confirmado", "correo", "enviar", "dame tu correo"]):
+            faltantes = _campos_faltantes(viaje_actual)
+            msg = "Aun faltan datos: " + ", ".join(faltantes) + ". Por favor, proporciona " + faltantes[0] + "."
+            return {"output": msg}
 
     return {"output": final.content}
 
